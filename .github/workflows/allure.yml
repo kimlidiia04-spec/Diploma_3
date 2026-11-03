@@ -2,8 +2,9 @@ name: Automated Tests & Allure Report
 
 on:
   push:
-    branches: [ main, master, develop3 ]
-  workflow_dispatch:
+    branches: [ "main", "develop-3", "develop3_UI" ]
+  pull_request:
+    branches: [ "main", "develop-3", "develop3_UI" ]
 
 jobs:
   test:
@@ -16,7 +17,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.10'
           cache: 'pip'
 
       - name: Install dependencies
@@ -24,55 +25,38 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Pytest with Allure results
+      - name: Install Allure commandline (optional for local generation, but needed if used)
+        uses: simple-elf/allure-action@master
+        with:
+          allure_results: 'allure-results'
+
+      - name: Run Pytest tests
         run: |
           pytest --alluredir=allure-results || true
 
-      - name: Store Allure Results
-        uses: actions/upload-artifact@v4
-        with:
-          name: allure-results
-          path: allure-results
-          retention-days: 1
-
-  publish-report:
-    needs: test
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pages: write
-      id-token: write
-    concurrency:
-      group: "pages"
-      cancel-in-progress: false
-
-    steps:
-      - name: Download Allure Results
-        uses: actions/download-artifact@v4
-        with:
-          name: allure-results
-          path: allure-results
-
       - name: Get Allure history
         uses: actions/checkout@v4
+        if: always()
         continue-on-error: true
         with:
           ref: gh-pages
           path: gh-pages
 
       - name: Build Allure Report
-        uses: simple-allure-report-action@master
+        uses: simple-elf/allure-action@master
+        if: always()
+        id: allure-report
         with:
-          allure_results: allure-results
-          allure_history: gh-pages/allure-history
+          allure_results: 'allure-results'
+          gh_pages: 'gh-pages'
+          allure_report: 'allure-report'
           keep_reports: 20
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Deploy Allure Report to GitHub Pages
+        if: always()
+        uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: allure-history
-          destination_dir: .
           publish_branch: gh-pages
-          commit_message: "Deploy Allure report for ${{ github.sha }}"
-          
+          publish_dir: allure-report
+          force_new_commit: true
