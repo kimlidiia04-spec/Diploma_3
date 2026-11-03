@@ -1,34 +1,80 @@
-name: Publish Allure Report
+
+name: UI Tests and Allure Report
 
 on:
   push:
     branches:
       - develop3_UI
+  workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
 
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
 jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run UI tests
+        run: python -m pytest --alluredir=allure-results
+        continue-on-error: true
+
+      - name: Checkout Allure history
+        uses: actions/checkout@v4
+        if: always()
+        continue-on-error: true
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Prepare history directory
+        if: always()
+        run: mkdir -p gh-pages
+
+      - name: Generate Allure report
+        uses: simple-elf/allure-report-action@v1.12
+        if: always()
+        with:
+          allure_results: allure-results
+          allure_report: allure-report
+          gh_pages: gh-pages
+          allure_history: allure-history
+          keep_reports: 20
+
+      - name: Upload Allure report
+        uses: actions/upload-pages-artifact@v3
+        if: always()
+        with:
+          path: allure-history
+
   deploy:
+    if: always()
+    needs: tests
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload Allure Report
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: ./allure-report
-
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
