@@ -1,5 +1,6 @@
 import pytest
 import requests
+import os
 from selenium import webdriver
 
 from data import STELLAR_BURGERS_URL
@@ -9,13 +10,26 @@ from pages.login_page import LoginPage
 
 @pytest.fixture(params=["chrome", "firefox"])
 def driver(request):
-    browsers = {"chrome": webdriver.Chrome, "firefox": webdriver.Firefox}
-    driver = browsers[request.param]()
-    driver.maximize_window()
+    if request.param == "chrome":
+        options = webdriver.ChromeOptions()
+        if os.getenv("CI"):
+            options.add_argument("--headless=new")
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+        browser = webdriver.Chrome(options=options)
 
-    yield driver
+    else:
+        options = webdriver.FirefoxOptions()
+        if os.getenv("CI"):
+            options.add_argument("-headless")
+        browser = webdriver.Firefox(options=options)
 
-    driver.quit()
+    if not os.getenv("CI"):
+        browser.maximize_window()
+
+    yield browser
+    browser.quit()
+
 
 
 @pytest.fixture
